@@ -1,0 +1,585 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Training Insights</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%233454D1'/%3E%3Cpath d='M7 22l6-7 4 4 8-10' stroke='white' stroke-width='3' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.min.js"></script>
+<script src="bqe-board.js"></script>
+<style>
+  :root {
+    --bg: #F5F6F9; --surface: #FFFFFF; --surface-alt: #ECEFF5; --border: #DDE1EA;
+    --ink: #16213E; --ink-2: #47517A; --ink-3: #8890AC;
+    --accent: #3454D1; --accent-soft: #E7EBFB;
+    --good: #1E8A5F; --good-soft: #E4F5EC; --warning: #B8801E; --warning-soft: #FBF1DE; --critical: #C23B3B; --critical-soft: #FBE7E4;
+    --shadow: 0 1px 2px rgba(22,33,62,0.06), 0 6px 16px rgba(22,33,62,0.06);
+    --serif: Georgia, "Iowan Old Style", "Source Serif 4", "Times New Roman", serif;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0C1220; --surface: #131A2B; --surface-alt: #1B2438; --border: #29334A;
+      --ink: #E9ECF6; --ink-2: #B0B7D1; --ink-3: #7C86A3; --accent: #7C93F5; --accent-soft: #1E2748;
+      --good: #4FC090; --good-soft: #123024; --warning: #E3AC49; --warning-soft: #34240A; --critical: #E2685A; --critical-soft: #38201B;
+      --shadow: 0 1px 2px rgba(0,0,0,0.35), 0 6px 20px rgba(0,0,0,0.3);
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0C1220; --surface: #131A2B; --surface-alt: #1B2438; --border: #29334A;
+    --ink: #E9ECF6; --ink-2: #B0B7D1; --ink-3: #7C86A3; --accent: #7C93F5; --accent-soft: #1E2748;
+    --good: #4FC090; --good-soft: #123024; --warning: #E3AC49; --warning-soft: #34240A; --critical: #E2685A; --critical-soft: #38201B;
+    --shadow: 0 1px 2px rgba(0,0,0,0.35), 0 6px 20px rgba(0,0,0,0.3);
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--sans); font-size: 14px; line-height: 1.45; }
+  .wrap { max-width: 1240px; margin: 0 auto; padding: 24px 16px 40px; display: flex; flex-direction: column; gap: 22px; }
+  .topbar { display: flex; align-items: center; justify-content: flex-end; gap: 10px; flex-wrap: wrap; font-size: 12.5px; color: var(--ink-2); }
+  .viewer-dot { width: 26px; height: 26px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; background: var(--surface-alt); border: 1px solid var(--border); font-size: 10.5px; font-weight: 600; margin-left: 2px; }
+  .viewer-dot.me { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .top-btn { border: 1px solid var(--border); background: var(--surface); color: var(--ink-2); border-radius: 999px; padding: 5px 12px; font: inherit; font-size: 12.5px; cursor: pointer; }
+  .top-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .signin { max-width: 440px; margin: 12vh auto 0; text-align: center; display: flex; flex-direction: column; gap: 14px; align-items: center; }
+  .signin p { color: var(--ink-2); margin: 0; }
+  .signin .msg { color: var(--critical); font-size: 13px; }
+  .primary-btn { background: var(--accent); color: #fff; border: 0; border-radius: 8px; padding: 10px 18px; font: inherit; font-weight: 600; cursor: pointer; }
+  .eyebrow { font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-3); font-weight: 600; }
+  h1 { font-family: var(--serif); font-size: 32px; margin: 2px 0 6px; font-weight: 600; }
+  .scope-line { color: var(--ink-2); max-width: 880px; }
+  .snapshot-tag { display: inline-block; margin-top: 8px; background: var(--accent-soft); color: var(--accent); border-radius: 999px; padding: 3px 11px; font-size: 12px; }
+  .section-title { font-family: var(--serif); font-size: 20px; margin: 0 0 4px; font-weight: 600; }
+  .section-sub { color: var(--ink-2); font-size: 13px; margin: 0 0 12px; }
+  .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow); padding: 16px 18px; }
+  details.panel > summary { cursor: pointer; font-family: var(--serif); font-size: 18px; font-weight: 600; list-style: none; }
+  details.panel > summary::-webkit-details-marker { display: none; }
+  details.panel > summary::before { content: "\25B8"; display: inline-block; margin-right: 8px; color: var(--ink-3); transition: transform .15s; }
+  details.panel[open] > summary::before { transform: rotate(90deg); }
+  .filters { display: flex; flex-wrap: wrap; gap: 14px 22px; align-items: center; }
+  .fgroup { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .fgroup > label { font-size: 12px; color: var(--ink-3); text-transform: uppercase; letter-spacing: .06em; margin-right: 2px; }
+  .pill { border: 1px solid var(--border); background: var(--surface); color: var(--ink-2); border-radius: 999px; padding: 4px 11px; font: inherit; font-size: 12.5px; cursor: pointer; }
+  .pill[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); font-weight: 600; }
+  select, input[type=search] { border: 1px solid var(--border); background: var(--surface); color: var(--ink); border-radius: 8px; padding: 5px 9px; font: inherit; font-size: 13px; max-width: 100%; }
+  .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; }
+  .kpi { text-align: left; appearance: none; font: inherit; color: inherit; cursor: pointer; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow); padding: 12px 14px; }
+  .kpi.active { border-color: var(--accent); background: var(--accent-soft); }
+  .kpi .lab { font-size: 11.5px; color: var(--ink-3); text-transform: uppercase; letter-spacing: .06em; }
+  .kpi .val { font-family: var(--serif); font-size: 28px; margin-top: 2px; }
+  .kpi .sub { font-size: 12px; color: var(--ink-2); }
+  .delta-up { color: var(--good); } .delta-down { color: var(--critical); } .delta-flat { color: var(--ink-3); }
+  .focus-item { display: flex; gap: 10px; padding: 9px 0; border-top: 1px solid var(--border); align-items: flex-start; }
+  .focus-item:first-child { border-top: 0; }
+  .focus-item.done { opacity: .5; }
+  .focus-item .txt { flex: 1; font-size: 13.5px; }
+  .focus-item .ev { color: var(--ink-2); font-size: 12.5px; display: block; margin-top: 2px; }
+  .tblwrap { width: 100%; overflow-x: hidden; }
+  table { width: 100%; border-collapse: collapse; table-layout: auto; font-size: 13px; }
+  th, td { padding: 7px 8px; text-align: right; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th:first-child, td:first-child { text-align: left; }
+  th { position: sticky; top: 0; background: var(--surface); font-size: 11.5px; color: var(--ink-3); text-transform: uppercase; letter-spacing: .05em; cursor: pointer; white-space: normal; user-select: none; }
+  th .arrow { opacity: .3; margin-left: 3px; } th.sorted .arrow { opacity: 1; color: var(--accent); }
+  td.name a, a.link { color: var(--accent); text-decoration: none; cursor: pointer; }
+  td.name a:hover, a.link:hover { text-decoration: underline; }
+  .c-good { color: var(--good); font-weight: 600; } .c-warn { color: var(--warning); font-weight: 600; } .c-crit { color: var(--critical); font-weight: 600; }
+  .muted { color: var(--ink-3); } .small { font-size: 12px; }
+  tr.inline-drill > td { background: var(--surface-alt); text-align: left; padding: 12px 14px; }
+  .inline-box { white-space: normal; display: flex; flex-direction: column; gap: 14px; }
+  .inline-box h4 { margin: 0 0 6px; font-size: 13px; }
+  .two { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; }
+  .btn { border: 1px solid var(--border); background: var(--surface); color: var(--ink-2); border-radius: 8px; padding: 5px 11px; font: inherit; font-size: 12.5px; cursor: pointer; }
+  .btn:hover { border-color: var(--accent); color: var(--accent); }
+  .btn.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .btn[disabled] { opacity: .5; cursor: default; }
+  .pager { display: flex; gap: 10px; align-items: center; justify-content: flex-end; margin-top: 10px; font-size: 12.5px; color: var(--ink-2); }
+  .rv { padding: 10px 0; border-top: 1px solid var(--border); font-size: 13px; }
+  .rv:first-child { border-top: 0; }
+  .rv .meta { color: var(--ink-3); font-size: 12px; }
+  .rv .quote { margin-top: 3px; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .chip { display: inline-block; border-radius: 999px; padding: 1px 8px; font-size: 11.5px; background: var(--surface-alt); color: var(--ink-2); margin-right: 4px; }
+  .chip.bad { background: var(--critical-soft); color: var(--critical); } .chip.warn { background: var(--warning-soft); color: var(--warning); }
+  .aibody { white-space: pre-wrap; font-size: 13.5px; line-height: 1.55; overflow-wrap: anywhere; }
+  .spark { width: 100%; max-width: 360px; height: 70px; display: block; }
+  .notes li { margin: 4px 0; } .notes { color: var(--ink-2); font-size: 13px; padding-left: 18px; }
+  footer { text-align: center; color: var(--ink-3); font-size: 12px; }
+  .err { color: var(--critical); font-size: 13px; }
+  @media (max-width: 640px) { h1 { font-size: 26px; } th, td { padding: 6px 4px; } table { font-size: 12px; } .hide-sm { display: none; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="topbar" id="topbar" hidden>
+    <span class="viewers" id="viewers"></span>
+    <span id="viewerName"></span>
+    <button type="button" class="top-btn" id="themeBtn">Theme</button>
+    <button type="button" class="top-btn" id="signOutBtn">Sign out</button>
+  </div>
+
+  <div class="signin" id="signin" hidden>
+    <div class="eyebrow">Support Operations &middot; Training</div>
+    <h1>Training Insights</h1>
+    <p>Where agents need coaching and where the team needs training, from Zendesk tickets, customer ratings and RingCentral ACE call scores.</p>
+    <button type="button" class="primary-btn" id="signInBtn">Sign in with RingCentral</button>
+    <div class="msg" id="signinMsg"></div>
+  </div>
+
+  <div id="board" hidden style="display:flex; flex-direction:column; gap:22px;">
+    <div>
+      <div class="eyebrow">Support Operations &middot; Training</div>
+      <h1>Training Insights</h1>
+      <div class="scope-line">Agent skills and customer experience across phone, email and webform tickets. Procurement and Custom Reports are left out. Each number compares an agent with the team on the same work.</div>
+      <span class="snapshot-tag" id="snapTag">Loading...</span>
+    </div>
+
+    <div class="panel">
+      <div class="filters">
+        <div class="fgroup"><label>Window</label><span id="fWeeks"></span></div>
+        <div class="fgroup"><label>Channel</label><span id="fCh"></span></div>
+        <div class="fgroup"><label for="fModule">Module</label><select id="fModule"></select></div>
+        <div class="fgroup"><label for="fMin">Min tickets</label><select id="fMin"><option>10</option><option selected>30</option><option>60</option><option>100</option></select></div>
+      </div>
+    </div>
+
+    <details class="panel" open id="focusPanel">
+      <summary>Where to focus</summary>
+      <p class="section-sub" style="margin-top:8px">Agent and module pairs furthest below the team on the same work, and the areas the whole team struggles with. Tick an item when you have acted on it.</p>
+      <div id="focusCoach"></div>
+      <h3 class="section-title" style="font-size:16px; margin-top:16px">Training gaps for the whole team</h3>
+      <div id="focusTrain"></div>
+      <div style="margin-top:10px"><button type="button" class="btn" id="showDone">Show completed</button></div>
+    </details>
+
+    <div class="kpi-grid" id="kpis"></div>
+
+    <div>
+      <h2 class="section-title">Agents</h2>
+      <p class="section-sub">Click a name to see that agent's weakest modules, trend and recent low-scoring work. Colours compare with the team (green better, amber below, red well below) and appear only when the sample is big enough.</p>
+      <div class="panel"><div class="tblwrap"><table id="agentTbl"></table></div></div>
+    </div>
+
+    <div>
+      <h2 class="section-title">Modules and areas</h2>
+      <p class="section-sub">Click a module to see its areas (last 12 months). Escalation is the share of tickets that went to Jira or Level 3.</p>
+      <div class="panel"><div class="tblwrap"><table id="modTbl"></table></div></div>
+    </div>
+
+    <div>
+      <h2 class="section-title">Low-score review</h2>
+      <p class="section-sub">The raw material for a coaching session: bad customer ratings with their comments, and calls ACE scored 5 or less or called negative.</p>
+      <div class="panel">
+        <div class="filters" style="margin-bottom:10px">
+          <div class="fgroup"><span id="rvTabs"></span></div>
+          <div class="fgroup"><label for="rvAgent">Agent</label><select id="rvAgent"></select></div>
+          <div class="fgroup"><label for="rvQ">Search</label><input type="search" id="rvQ" placeholder="comment or summary"></div>
+        </div>
+        <div id="rvList"></div>
+        <div class="pager"><button type="button" class="btn" id="rvPrev">Prev</button><span id="rvInfo"></span><button type="button" class="btn" id="rvNext">Next</button></div>
+      </div>
+    </div>
+
+    <div class="panel" id="aiPanel">
+      <h2 class="section-title">AI coaching summary</h2>
+      <p class="section-sub">Claude reads the last 90 days of aggregated numbers plus redacted customer snippets (emails, phone numbers, numbers and name-like words are removed first) and writes coaching and training suggestions. It is a starting point for a conversation, not a verdict on anyone. Nothing is written to Zendesk or RingCX.</p>
+      <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:10px">
+        <button type="button" class="btn primary" id="aiBtn">Generate a new summary</button>
+        <select id="aiPick"></select>
+        <span class="small muted" id="aiMeta"></span>
+      </div>
+      <div class="err" id="aiErr"></div>
+      <div class="aibody" id="aiBody"></div>
+    </div>
+
+    <details class="panel">
+      <summary>Method and limits</summary>
+      <ul class="notes" id="notes"></ul>
+    </details>
+    <footer>BQE Software &middot; Internal &middot; Training Insights &middot; Version 1.0</footer>
+  </div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  var D = null, VIEWER = null, REFRESH_MS = 30 * 60 * 1000, refreshTimer = null;
+  var I = {};                       // column name -> index in an aggregate row
+  var state = { weeks: 13, ch: "all", module: "", min: 30, sortKey: "n", sortDir: -1, kpi: "", openAgent: "", openModule: "", rvTab: "csat", rvAgent: "", rvQ: "", rvPage: 0, showDone: false, modSortKey: "n", modSortDir: -1 };
+  var SUM = ["n", "solved", "s24", "res_sum", "res_n", "rep_sum", "rep_n", "esc", "negai", "csat_good", "csat_bad", "ace_n", "ace_sum", "ace_low", "ace_neg"];
+  var PAGE = 15;
+
+  function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
+  function $(id) { return document.getElementById(id); }
+  function blank() { var o = {}; SUM.forEach(function (k) { o[k] = 0; }); return o; }
+  function add(o, r) { SUM.forEach(function (k) { o[k] += +r[I[k]] || 0; }); }
+  function pct(a, b) { return b > 0 ? 100 * a / b : null; }
+  function f1(x) { return x == null ? "n/a" : (Math.round(x * 10) / 10).toFixed(1); }
+  function fp(x) { return x == null ? "n/a" : Math.round(x) + "%"; }
+  function ratings(a) { return a.csat_good + a.csat_bad; }
+  var M = {   // metric functions on a sums object; "bad" says which direction is worse
+    csat: { f: function (a) { return pct(a.csat_good, ratings(a)); }, n: ratings, minN: 8, step: [5, 10], low: true, fmt: fp, lab: "CSAT" },
+    ace: { f: function (a) { return a.ace_n ? a.ace_sum / a.ace_n : null; }, n: function (a) { return a.ace_n; }, minN: 15, step: [0.3, 0.6], low: true, fmt: function (x) { return x == null ? "n/a" : x.toFixed(2); }, lab: "ACE avg" },
+    lowace: { f: function (a) { return pct(a.ace_low, a.ace_n); }, n: function (a) { return a.ace_n; }, minN: 15, step: [4, 8], low: false, fmt: fp, lab: "Low ACE" },
+    s24: { f: function (a) { return pct(a.s24, a.solved); }, n: function (a) { return a.solved; }, minN: 30, step: [8, 15], low: true, fmt: fp, lab: "Solved in 24h" },
+    esc: { f: function (a) { return pct(a.esc, a.n); }, n: function (a) { return a.n; }, minN: 30, step: [5, 10], low: false, fmt: fp, lab: "Escalated" },
+    reply: { f: function (a) { return a.rep_n ? a.rep_sum / a.rep_n / 60 : null; }, n: function (a) { return a.rep_n; }, minN: 30, step: [2, 6], low: false, fmt: function (x) { return x == null ? "n/a" : (x < 10 ? x.toFixed(1) : Math.round(x)) + "h"; }, lab: "First reply" }
+  };
+  // 0 = fine, 1 = below the team, 2 = well below (only when both samples are big enough)
+  function grade(key, a, team) {
+    var m = M[key], v = m.f(a), t = m.f(team);
+    if (v == null || t == null || m.n(a) < m.minN) return 0;
+    var gap = m.low ? t - v : v - t;
+    return gap >= m.step[1] ? 2 : gap >= m.step[0] ? 1 : 0;
+  }
+  function cell(key, a, team) {
+    var g = grade(key, a, team), v = M[key].f(a);
+    var cls = g === 2 ? "c-crit" : g === 1 ? "c-warn" : "";
+    var n = key === "csat" ? " <span class='muted small'>(" + ratings(a) + ")</span>" : key === "ace" ? " <span class='muted small'>(" + a.ace_n + ")</span>" : "";
+    return "<td class='" + cls + "'>" + M[key].fmt(v) + n + "</td>";
+  }
+
+  // ---------- data selection ----------
+  function weeksList() { var s = {}; D.agg.forEach(function (r) { s[r[I.wk]] = 1; }); return Object.keys(s).sort(); }
+  function range(offsetWeeks) {      // returns [fromWk, toWk] inclusive, offsetWeeks = 0 current, 1 previous period
+    var wl = weeksList(), n = state.weeks, end = wl.length - offsetWeeks * n, start = Math.max(0, end - n);
+    return [wl[start] || "9999", wl[Math.max(0, end - 1)] || "0000"];
+  }
+  function pass(r, rg, noModule) {
+    return r[I.wk] >= rg[0] && r[I.wk] <= rg[1] && (state.ch === "all" || r[I.ch] === state.ch) && (noModule || !state.module || r[I.module] === state.module);
+  }
+  function group(keyFn, rg, noModule) {
+    var o = {};
+    D.agg.forEach(function (r) { if (pass(r, rg, noModule)) { var k = keyFn(r); add(o[k] || (o[k] = blank()), r); } });
+    return o;
+  }
+  function total(rg, noModule) { var t = blank(); D.agg.forEach(function (r) { if (pass(r, rg, noModule)) add(t, r); }); return t; }
+  function series(filter, key) {      // rolling 4-week value per week over the last 26 weeks
+    var wl = weeksList().slice(-26), out = [];
+    wl.forEach(function (w, i) {
+      var lo = wl[Math.max(0, i - 3)], a = blank();
+      D.agg.forEach(function (r) { if (r[I.wk] >= lo && r[I.wk] <= w && filter(r)) add(a, r); });
+      out.push(M[key].n(a) >= 3 ? M[key].f(a) : null);
+    });
+    return out;
+  }
+
+  // ---------- Where to focus ----------
+  var DONE_KEY = "trainingInsights.done.v1";
+  function loadDone() { try { return JSON.parse(localStorage.getItem(DONE_KEY)) || {}; } catch (e) { return {}; } }
+  var done = loadDone();
+  function saveDone() { try { localStorage.setItem(DONE_KEY, JSON.stringify(done)); } catch (e) {} }
+  function coachCandidates() {
+    var rg = range(0), byAM = group(function (r) { return r[I.agent] + "|" + r[I.module]; }, rg, true);
+    var byM = group(function (r) { return r[I.module]; }, rg, true), out = [];
+    Object.keys(byAM).forEach(function (k) {
+      var a = byAM[k], p = k.split("|"), team = byM[p[1]];
+      if (a.n < 15 || p[1] === "Unclassified" || (state.module && p[1] !== state.module)) return;
+      // The team figure for this module excludes the agent being judged.
+      var tm = blank(); SUM.forEach(function (f) { tm[f] = team[f] - a[f]; });
+      if (tm.n < 30) return;
+      var parts = [], score = 0;
+      function gap(key, weight) {
+        var m = M[key], v = m.f(a), t = m.f(tm);
+        if (v == null || t == null || m.n(a) < Math.min(m.minN, 4 + (key === "csat" || key === "ace" || key === "lowace" ? 0 : 11)) || m.n(tm) < m.minN) return;
+        var g = m.low ? t - v : v - t;
+        if (g < m.step[0]) return;
+        score += weight * g / m.step[0];
+        parts.push(m.lab + " " + m.fmt(v) + " vs team " + m.fmt(t));
+      }
+      gap("csat", 1.4); gap("ace", 1.2); gap("lowace", 0.6); gap("s24", 1); gap("esc", 1);
+      if (parts.length && score >= 1.6) out.push({ id: "coach:" + k, agent: p[0], module: p[1], n: a.n, score: score * Math.log(a.n + 1), parts: parts });
+    });
+    return out.sort(function (x, y) { return y.score - x.score; });
+  }
+  function trainCandidates() {
+    var arr = [], all = D.areas, base = blank();
+    all.forEach(function (r) { var o = D.area_ix; base.n += r[o.n]; base.esc += r[o.esc]; base.csat_good += r[o.csat_good]; base.csat_bad += r[o.csat_bad]; base.ace_n += r[o.ace_n]; base.ace_sum += r[o.ace_sum]; base.s24 += r[o.s24]; base.solved += r[o.solved]; });
+    all.forEach(function (r) {
+      var o = D.area_ix, n = r[o.n]; if (n < 40 || (state.module && r[o.module] !== state.module)) return;
+      var a = { n: n, esc: r[o.esc], csat_good: r[o.csat_good], csat_bad: r[o.csat_bad], ace_n: r[o.ace_n], ace_sum: r[o.ace_sum], s24: r[o.s24], solved: r[o.solved] };
+      var parts = [], score = 0;
+      [["csat", 1.4], ["ace", 1.2], ["s24", 1], ["esc", 1]].forEach(function (c) {
+        var m = M[c[0]], v = m.f(a), t = m.f(base);
+        if (v == null || t == null || m.n(a) < Math.min(m.minN, 12)) return;
+        var g = m.low ? t - v : v - t; if (g < m.step[0]) return;
+        score += c[1] * g / m.step[0]; parts.push(m.lab + " " + m.fmt(v) + " vs all " + m.fmt(t));
+      });
+      if (parts.length && score >= 1.6) arr.push({ id: "train:" + r[o.module] + "|" + r[o.area], label: r[o.module] + " / " + r[o.area], n: n, score: score * Math.log(n + 1), parts: parts });
+    });
+    return arr.sort(function (x, y) { return y.score - x.score; });
+  }
+  function focusRows(list, mk) {
+    var shown = list.filter(function (c) { return state.showDone || !done[c.id]; }).slice(0, 10);
+    if (!shown.length) return "<div class='muted small'>Nothing stands out with the current filters.</div>";
+    return shown.map(function (c) {
+      var d = done[c.id];
+      return "<div class='focus-item" + (d ? " done" : "") + "'><input type='checkbox' data-done='" + esc(c.id) + "'" + (d ? " checked" : "") + " aria-label='Mark done'><div class='txt'>" + mk(c) + "<span class='ev'>" + esc(c.parts.join("; ")) + "</span></div></div>";
+    }).join("");
+  }
+  function renderFocus() {
+    $("focusCoach").innerHTML = focusRows(coachCandidates(), function (c) {
+      return "<b><a class='link' data-agent='" + esc(c.agent) + "'>" + esc(c.agent) + "</a></b> in <b>" + esc(c.module) + "</b> (" + c.n + " tickets)";
+    });
+    $("focusTrain").innerHTML = focusRows(trainCandidates(), function (c) { return "<b>" + esc(c.label) + "</b> (" + c.n + " tickets, 12 months)"; });
+    $("showDone").textContent = state.showDone ? "Hide completed" : "Show completed";
+  }
+
+  // ---------- KPIs ----------
+  var KPIS = [["n", "Tickets"], ["csat", "CSAT"], ["ace", "ACE call score"], ["s24", "Solved in 24h"], ["reply", "First reply"], ["esc", "Escalated"]];
+  function renderKpis() {
+    var cur = total(range(0)), prev = total(range(1));
+    $("kpis").innerHTML = KPIS.map(function (k) {
+      var key = k[0], v, pv, txt, sub, dcls = "delta-flat", dtxt = "";
+      if (key === "n") { v = cur.n; pv = prev.n; txt = v.toLocaleString(); sub = "created in the window"; dtxt = pv ? (v >= pv ? "+" : "") + Math.round(100 * (v - pv) / pv) + "% vs before" : ""; }
+      else {
+        var m = M[key]; v = m.f(cur); pv = m.f(prev); txt = m.fmt(v);
+        sub = key === "csat" ? ratings(cur) + " ratings" : key === "ace" ? cur.ace_n + " calls" : key === "esc" ? "of all tickets" : key === "reply" ? "average" : "of " + cur.solved.toLocaleString() + " solved";
+        if (v != null && pv != null) { var d = v - pv, unit = key === "ace" ? "" : " pts"; dtxt = (d >= 0 ? "+" : "") + (key === "ace" ? d.toFixed(2) : d.toFixed(1)) + unit + " vs before"; var better = m.low ? d > 0.0001 : d < -0.0001, worse = m.low ? d < -0.0001 : d > 0.0001; dcls = better ? "delta-up" : worse ? "delta-down" : "delta-flat"; }
+      }
+      return "<button type='button' class='kpi" + (state.kpi === key ? " active" : "") + "' data-kpi='" + key + "'><div class='lab'>" + k[1] + "</div><div class='val'>" + txt + "</div><div class='sub'>" + sub + " <span class='" + dcls + "'>" + dtxt + "</span></div></button>";
+    }).join("");
+  }
+
+  // ---------- Agents table ----------
+  var COLS = [["agent", "Agent"], ["n", "Tickets"], ["csat", "CSAT"], ["ace", "ACE avg"], ["lowace", "Low ACE"], ["s24", "Solved 24h"], ["esc", "Escalated"], ["reply", "First reply"]];
+  function sortVal(key, name, a) { return key === "agent" ? name.toLowerCase() : key === "n" ? a.n : (M[key].f(a) == null ? (M[key].low ? 1e9 : -1e9) : M[key].f(a)); }
+  function renderAgents() {
+    var rg = range(0), by = group(function (r) { return r[I.agent]; }, rg), team = total(rg), min = state.min;
+    var names = Object.keys(by).filter(function (k) { return by[k].n >= min; });
+    var key = state.sortKey, dir = state.sortDir;
+    names.sort(function (x, y) {
+      var a = sortVal(key, x, by[x]), b = sortVal(key, y, by[y]);
+      return (a < b ? -1 : a > b ? 1 : 0) * dir * (key !== "agent" && key !== "n" && M[key] && M[key].low ? 1 : 1);
+    });
+    // for "worse is lower" metrics a click sorts worst first when dir is -1 (ascending value)
+    if (key !== "agent" && key !== "n" && M[key]) names.sort(function (x, y) {
+      var a = sortVal(key, x, by[x]), b = sortVal(key, y, by[y]); return M[key].low ? (a - b) * (dir === -1 ? 1 : -1) : (b - a) * (dir === -1 ? 1 : -1);
+    });
+    var h = "<thead><tr>" + COLS.map(function (c) { return "<th data-sort='" + c[0] + "'" + (state.sortKey === c[0] ? " class='sorted'" : "") + ">" + c[1] + "<span class='arrow'>" + (state.sortKey === c[0] ? (state.sortDir === -1 ? "▼" : "▲") : "▼") + "</span></th>"; }).join("") + "</tr></thead>";
+    var rows = names.map(function (nm) {
+      var a = by[nm];
+      return "<tr data-agent-row='" + esc(nm) + "'><td class='name'><a data-agent='" + esc(nm) + "'>" + esc(nm) + "</a></td><td>" + a.n + "</td>" + cell("csat", a, team) + cell("ace", a, team) + cell("lowace", a, team) + cell("s24", a, team) + cell("esc", a, team) + cell("reply", a, team) + "</tr>";
+    }).join("");
+    var tr = "<tr style='font-weight:600'><td>Team</td><td>" + team.n + "</td>" + COLS.slice(2).map(function (c) { var m = M[c[0]]; return "<td>" + m.fmt(m.f(team)) + "</td>"; }).join("") + "</tr>";
+    $("agentTbl").innerHTML = h + "<tbody>" + rows + tr + "</tbody>";
+    if (state.openAgent) placeAgentDrill();
+  }
+
+  function sparkSvg(vals, color, fmt) {
+    var pts = vals.map(function (v, i) { return v == null ? null : [i, v]; }).filter(Boolean);
+    if (pts.length < 2) return "<div class='muted small'>Not enough data for a trend.</div>";
+    var lo = Math.min.apply(null, pts.map(function (p) { return p[1]; })), hi = Math.max.apply(null, pts.map(function (p) { return p[1]; })); if (hi === lo) { hi += 1; lo -= 1; }
+    var W = 360, H = 70, n = vals.length - 1 || 1;
+    var d = pts.map(function (p, i) { return (i ? "L" : "M") + (6 + (W - 12) * p[0] / n).toFixed(1) + " " + (H - 8 - (H - 16) * (p[1] - lo) / (hi - lo)).toFixed(1); }).join(" ");
+    var last = pts[pts.length - 1];
+    return "<svg class='spark' viewBox='0 0 " + W + " " + H + "' role='img'><path d='" + d + "' fill='none' stroke='" + color + "' stroke-width='2' stroke-linejoin='round'/><circle cx='" + (6 + (W - 12) * last[0] / n).toFixed(1) + "' cy='" + (H - 8 - (H - 16) * (last[1] - lo) / (hi - lo)).toFixed(1) + "' r='3.5' fill='" + color + "'/></svg><div class='small muted'>Now " + fmt(last[1]) + " &middot; range " + fmt(lo) + " to " + fmt(hi) + " (rolling 4 weeks, last 26 weeks)</div>";
+  }
+  function agentDrillHtml(name) {
+    var rg = range(0), mine = group(function (r) { return r[I.module]; }, rg, true), rows = [];
+    var byMall = group(function (r) { return r[I.module]; }, rg, true);
+    // module-level comparison against everyone else
+    var myAgg = {}; D.agg.forEach(function (r) { if (r[I.agent] === name && pass(r, rg, true)) add(myAgg[r[I.module]] || (myAgg[r[I.module]] = blank()), r); });
+    Object.keys(myAgg).forEach(function (m) {
+      var a = myAgg[m], t = byMall[m], tm = blank(); SUM.forEach(function (f) { tm[f] = t[f] - a[f]; });
+      if (a.n < 8) return;
+      var s = grade("csat", a, tm) + grade("ace", a, tm) + grade("s24", a, tm) + grade("esc", a, tm);
+      rows.push({ m: m, a: a, tm: tm, s: s });
+    });
+    rows.sort(function (x, y) { return y.s - x.s || y.a.n - x.a.n; });
+    var tbl = "<table><thead><tr><th>Module</th><th>Tickets</th><th>CSAT</th><th>ACE avg</th><th>Solved 24h</th><th>Escalated</th></tr></thead><tbody>" +
+      rows.slice(0, 8).map(function (r) { return "<tr><td>" + esc(r.m) + "</td><td>" + r.a.n + "</td>" + cell("csat", r.a, r.tm) + cell("ace", r.a, r.tm) + cell("s24", r.a, r.tm) + cell("esc", r.a, r.tm) + "</tr>"; }).join("") + "</tbody></table><div class='small muted'>Each row compares the agent with the rest of the team on that module. Worst first.</div>";
+    var f = function (r) { return r[I.agent] === name && (state.ch === "all" || r[I.ch] === state.ch) && (!state.module || r[I.module] === state.module); };
+    var myBad = D.bad_csat.filter(function (r) { return r[2] === name; }).length, myLow = D.low_ace.filter(function (r) { return r[2] === name; }).length;
+    return "<div class='inline-box'><div class='two'><div><h4>Weakest modules against the team</h4>" + tbl + "</div><div><h4>CSAT trend</h4>" + sparkSvg(series(f, "csat"), "#3454D1", fp) + "<h4 style='margin-top:10px'>ACE call score trend</h4>" + sparkSvg(series(f, "ace"), "#1E8A8A", function (x) { return x.toFixed(2); }) + "<h4 style='margin-top:10px'>Solved in 24h trend</h4>" + sparkSvg(series(f, "s24"), "#7A4FA0", fp) + "</div></div>" +
+      "<div><button type='button' class='btn' data-review='" + esc(name) + "'>Review this agent's low-score work (" + myBad + " bad ratings, " + myLow + " low calls)</button> <button type='button' class='btn' data-close='1'>Close</button></div></div>";
+  }
+  function placeAgentDrill() {
+    var old = document.getElementById("agentDrill"); if (old) old.remove();
+    if (!state.openAgent) return;
+    var row = Array.prototype.filter.call(document.querySelectorAll("#agentTbl tr[data-agent-row]"), function (r) { return r.getAttribute("data-agent-row") === state.openAgent; })[0];
+    if (!row) return;
+    var tr = document.createElement("tr"); tr.id = "agentDrill"; tr.className = "inline-drill";
+    tr.innerHTML = "<td colspan='" + COLS.length + "'>" + agentDrillHtml(state.openAgent) + "</td>";
+    row.parentNode.insertBefore(tr, row.nextSibling);
+  }
+
+  // ---------- Modules table ----------
+  var MCOLS = [["module", "Module"], ["n", "Tickets"], ["csat", "CSAT"], ["ace", "ACE avg"], ["s24", "Solved 24h"], ["reply", "First reply"], ["esc", "Escalated"]];
+  function renderModules() {
+    var rg = range(0), by = group(function (r) { return r[I.module]; }, rg, true), team = total(rg, true);
+    var names = Object.keys(by).filter(function (k) { return by[k].n >= 20; });
+    var k = state.modSortKey, dir = state.modSortDir;
+    names.sort(function (x, y) {
+      if (k === "module") return x.localeCompare(y) * -dir;
+      if (k === "n") return (by[y].n - by[x].n) * (dir === -1 ? 1 : -1);
+      var a = M[k].f(by[x]), b = M[k].f(by[y]); a = a == null ? (M[k].low ? 1e9 : -1e9) : a; b = b == null ? (M[k].low ? 1e9 : -1e9) : b;
+      return M[k].low ? (a - b) * (dir === -1 ? 1 : -1) : (b - a) * (dir === -1 ? 1 : -1);
+    });
+    var h = "<thead><tr>" + MCOLS.map(function (c) { return "<th data-msort='" + c[0] + "'" + (k === c[0] ? " class='sorted'" : "") + ">" + c[1] + "<span class='arrow'>▼</span></th>"; }).join("") + "</tr></thead>";
+    var rows = names.map(function (m) {
+      var a = by[m];
+      return "<tr data-module-row='" + esc(m) + "'><td class='name'><a data-module='" + esc(m) + "'>" + esc(m) + "</a></td><td>" + a.n + "</td>" + cell("csat", a, team) + cell("ace", a, team) + cell("s24", a, team) + cell("reply", a, team) + cell("esc", a, team) + "</tr>";
+    }).join("");
+    $("modTbl").innerHTML = h + "<tbody>" + rows + "</tbody>";
+    if (state.openModule) placeModuleDrill();
+  }
+  function placeModuleDrill() {
+    var old = document.getElementById("modDrill"); if (old) old.remove();
+    if (!state.openModule) return;
+    var row = Array.prototype.filter.call(document.querySelectorAll("#modTbl tr[data-module-row]"), function (r) { return r.getAttribute("data-module-row") === state.openModule; })[0];
+    if (!row) return;
+    var o = D.area_ix, list = D.areas.filter(function (r) { return r[o.module] === state.openModule; }).sort(function (a, b) { return b[o.n] - a[o.n]; }).slice(0, 12);
+    var tbl = "<table><thead><tr><th>Area (12 months)</th><th>Tickets</th><th>CSAT</th><th>ACE avg</th><th>Solved 24h</th><th>Escalated</th></tr></thead><tbody>" + list.map(function (r) {
+      var cs = r[o.csat_good] + r[o.csat_bad];
+      return "<tr><td>" + esc(r[o.area]) + "</td><td>" + r[o.n] + "</td><td>" + (cs >= 5 ? fp(100 * r[o.csat_good] / cs) + " <span class='muted small'>(" + cs + ")</span>" : "<span class='muted'>n/a</span>") + "</td><td>" + (r[o.ace_n] >= 8 ? (r[o.ace_sum] / r[o.ace_n]).toFixed(2) : "<span class='muted'>n/a</span>") + "</td><td>" + fp(pct(r[o.s24], r[o.solved])) + "</td><td>" + fp(pct(r[o.esc], r[o.n])) + "</td></tr>";
+    }).join("") + "</tbody></table>";
+    var tr = document.createElement("tr"); tr.id = "modDrill"; tr.className = "inline-drill";
+    tr.innerHTML = "<td colspan='" + MCOLS.length + "'><div class='inline-box'>" + tbl + "<div><button type='button' class='btn' data-close='1'>Close</button></div></div></td>";
+    row.parentNode.insertBefore(tr, row.nextSibling);
+  }
+
+  // ---------- Low-score review ----------
+  function zdLink(id) { return "<a class='link' target='_blank' rel='noopener' href='https://bqe.zendesk.com/agent/tickets/" + encodeURIComponent(id) + "'>#" + esc(id) + "</a>"; }
+  function reviewItems() {
+    var rg = range(0), from = rg[0], q = state.rvQ.toLowerCase();
+    var cutoff = from;      // dates are YYYY-MM-DD; a week key is the Sunday that starts the window
+    function ok(r, text) { return String(r[0]) >= cutoff && (!state.rvAgent || r[2] === state.rvAgent) && (!state.module || r[3] === state.module) && (!q || String(text).toLowerCase().indexOf(q) >= 0); }
+    return state.rvTab === "csat" ? D.bad_csat.filter(function (r) { return ok(r, r[6]); }) : D.low_ace.filter(function (r) { return ok(r, r[7]); });
+  }
+  function renderReview() {
+    var items = reviewItems(), pages = Math.max(1, Math.ceil(items.length / PAGE)); state.rvPage = Math.min(state.rvPage, pages - 1);
+    $("rvTabs").innerHTML = [["csat", "Bad CSAT (" + D.bad_csat.length + ")"], ["ace", "Low ACE calls (" + D.low_ace.length + ")"]].map(function (t) { return "<button type='button' class='pill' data-rvtab='" + t[0] + "' aria-pressed='" + (state.rvTab === t[0]) + "'>" + t[1] + "</button>"; }).join("");
+    var names = {}; D.bad_csat.forEach(function (r) { if (r[2]) names[r[2]] = 1; }); D.low_ace.forEach(function (r) { if (r[2]) names[r[2]] = 1; });
+    $("rvAgent").innerHTML = "<option value=''>All agents</option>" + Object.keys(names).sort().map(function (n) { return "<option" + (n === state.rvAgent ? " selected" : "") + ">" + esc(n) + "</option>"; }).join("");
+    var page = items.slice(state.rvPage * PAGE, state.rvPage * PAGE + PAGE);
+    $("rvList").innerHTML = page.length ? page.map(function (r) {
+      if (state.rvTab === "csat") return "<div class='rv'><div class='meta'>" + esc(r[0]) + " &middot; " + zdLink(r[1]) + " &middot; <b>" + esc(r[2] || "unassigned") + "</b> &middot; <span class='chip'>" + esc(r[3]) + "</span><span class='chip'>" + esc(r[4]) + "</span><span class='chip'>" + esc(r[5]) + "</span></div><div class='quote'>" + (r[6] ? esc(r[6]) : "<span class='muted'>No comment left.</span>") + (r[7] ? " <span class='muted'>(" + esc(r[7]) + ")</span>" : "") + "</div></div>";
+      return "<div class='rv'><div class='meta'>" + esc(r[0]) + " &middot; " + zdLink(r[1]) + " &middot; <b>" + esc(r[2] || "unassigned") + "</b> &middot; <span class='chip " + (r[5] <= 3 ? "bad" : "warn") + "'>ACE " + esc(r[5]) + "</span>" + (r[6] ? "<span class='chip " + (r[6] === "Negative" ? "bad" : "") + "'>" + esc(r[6]) + "</span>" : "") + "<span class='chip'>" + esc(r[3]) + "</span>" + (r[8] ? " <a class='link' target='_blank' rel='noopener' href='" + esc(r[8]) + "'>Open in ACE</a>" : "") + "</div><div class='quote'>" + esc(r[7]) + "</div></div>";
+    }).join("") : "<div class='muted small'>Nothing matches these filters in the window.</div>";
+    $("rvInfo").textContent = items.length ? "Showing " + (state.rvPage * PAGE + 1) + "-" + Math.min(items.length, state.rvPage * PAGE + PAGE) + " of " + items.length : "0 items";
+    $("rvPrev").disabled = state.rvPage <= 0; $("rvNext").disabled = state.rvPage >= pages - 1;
+  }
+
+  // ---------- AI summary ----------
+  function renderAi() {
+    var list = D.ai || [], pick = $("aiPick");
+    pick.hidden = list.length < 2;
+    pick.innerHTML = list.map(function (a, i) { return "<option value='" + i + "'>" + esc(new Date(a.at).toLocaleString()) + "</option>"; }).join("");
+    showAi(list[0]);
+  }
+  function showAi(a) {
+    $("aiBody").textContent = a ? a.body : "No summary yet. Press Generate.";
+    $("aiMeta").textContent = a ? "Written " + new Date(a.at).toLocaleString() + " by " + a.by + " (" + a.scope + ")" : "";
+  }
+
+  // ---------- render all ----------
+  function renderAll() {
+    var wl = weeksList(), rg = range(0);
+    $("snapTag").textContent = "Window " + rg[0] + " to " + rg[1] + " (week starts) · data as of " + new Date(D.generated_at).toLocaleString("en-US", { timeZone: "America/Los_Angeles", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) + " PT · CSAT since " + String(D.csat_since).slice(0, 10) + " · ACE calls since " + String(D.ace_since).slice(0, 10);
+    renderFocus(); renderKpis(); renderAgents(); renderModules(); renderReview();
+  }
+  function buildFilters() {
+    $("fWeeks").innerHTML = [4, 8, 13, 26, 52].map(function (w) { return "<button type='button' class='pill' data-weeks='" + w + "' aria-pressed='" + (state.weeks === w) + "'>" + w + " wk</button>"; }).join("");
+    $("fCh").innerHTML = [["all", "All"], ["phone", "Phone"], ["email", "Email"], ["webform", "Webform"]].map(function (c) { return "<button type='button' class='pill' data-ch='" + c[0] + "' aria-pressed='" + (state.ch === c[0]) + "'>" + c[1] + "</button>"; }).join("");
+    var cnt = {}; D.agg.forEach(function (r) { cnt[r[I.module]] = (cnt[r[I.module]] || 0) + r[I.n]; });
+    $("fModule").innerHTML = "<option value=''>All modules</option>" + Object.keys(cnt).sort(function (a, b) { return cnt[b] - cnt[a]; }).map(function (m) { return "<option" + (m === state.module ? " selected" : "") + ">" + esc(m) + "</option>"; }).join("");
+  }
+  function setData(j) {
+    D = j; I = {}; (j.areas || []).forEach(function (r) { var m = String(r[0]), a = String(r[1]); if (a.toLowerCase().indexOf(m.toLowerCase() + " ") === 0 && a.length > m.length + 1) r[1] = a.slice(m.length + 1); }); D.agg_cols.forEach(function (c, i) { I[c] = i; }); D.area_ix = {}; D.area_cols.forEach(function (c, i) { D.area_ix[c] = i; });
+    buildFilters(); renderAll(); renderAi();
+    $("notes").innerHTML = [
+      "Population: tickets created in the last 12 months with an assignee, excluding the Procurement and Custom Reports groups. Phone, email and webform are the ticket's channel.",
+      "CSAT is Zendesk's good or bad rating, counted on the ticket's created week and assignee. Only " + (function () { var t = total([ "0000", "9999" ]); return t.n ? Math.round(100 * ratings(t) / t.n) + "% of tickets" : "a minority of tickets"; })() + " get a rating, so small samples are shown in brackets and are not coloured.",
+      "ACE call score is RingCentral's AI score (0 to 9) for answered phone calls. 6 to 9 is the normal range; 5 or less counts as low. Only phone tickets have it. The per-category ACE scorecards (empathy, uncertainty) are not available through RingCentral's API, so they are not here.",
+      "Solved in 24h is the share of solved tickets with a first resolution time under 24 hours. A one-touch measure is left out: Zendesk comment counts exist only for tickets still open since late October. Escalated is a Jira escalation or Level 3 tag. First reply is Zendesk's reply time in hours.",
+      "Colours compare an agent with the whole team on the same measure; the agent-by-module comparison leaves the agent out of the team figure. Nothing is coloured unless there are at least 8 ratings, 15 calls or 30 tickets.",
+      "Where to focus combines how far each measure is below the team, weighted, and favours bigger samples. It is a prompt to look, not a verdict: open the tickets and calls in the Low-score review before drawing conclusions about a person.",
+      "The Low-score review lists the latest 400 bad ratings and the latest 500 low or negative calls from the last 120 days. Customer comments and call summaries can name customers, so keep this page internal.",
+      "Data refreshes: tickets every 2 minutes, CSAT every 30 minutes, ACE scores once a day from the PC pull. This page reloads its data every 30 minutes while open."
+    ].map(function (s) { return "<li>" + esc(s) + "</li>"; }).join("");
+  }
+  function load() {
+    BQEBoard.api("ti-board").then(function (j) { setData(j); }).catch(function (e) {
+      if (!D) $("snapTag").textContent = "Could not load: " + e.message;
+    });
+  }
+
+  // ---------- events ----------
+  document.addEventListener("click", function (ev) {
+    var t = ev.target;
+    function el(sel) { return t.closest ? t.closest(sel) : null; }
+    var x;
+    if ((x = el("[data-weeks]"))) { state.weeks = +x.getAttribute("data-weeks"); buildFilters(); renderAll(); return; }
+    if ((x = el("[data-ch]"))) { state.ch = x.getAttribute("data-ch"); buildFilters(); renderAll(); return; }
+    if ((x = el("[data-kpi]"))) { var k = x.getAttribute("data-kpi"); state.kpi = state.kpi === k ? "" : k; if (M[k]) { state.sortKey = k; state.sortDir = -1; } else { state.sortKey = "n"; state.sortDir = -1; } renderKpis(); renderAgents(); $("agentTbl").scrollIntoView({ behavior: "smooth", block: "start" }); return; }
+    if ((x = el("th[data-sort]"))) { var s = x.getAttribute("data-sort"); if (state.sortKey === s) state.sortDir = -state.sortDir; else { state.sortKey = s; state.sortDir = s === "agent" ? 1 : -1; } renderAgents(); return; }
+    if ((x = el("th[data-msort]"))) { var m = x.getAttribute("data-msort"); if (state.modSortKey === m) state.modSortDir = -state.modSortDir; else { state.modSortKey = m; state.modSortDir = m === "module" ? 1 : -1; } renderModules(); return; }
+    if ((x = el("[data-agent]"))) { var a = x.getAttribute("data-agent"); if (el("#focusPanel")) { state.openAgent = a; renderAgents(); var row = document.querySelector("#agentTbl tr[data-agent-row]") && Array.prototype.filter.call(document.querySelectorAll("#agentTbl tr[data-agent-row]"), function (r) { return r.getAttribute("data-agent-row") === a; })[0]; if (row) row.scrollIntoView({ behavior: "smooth", block: "center" }); else alert(a + " is below the minimum ticket count for the table. Lower Min tickets to see them."); return; } state.openAgent = state.openAgent === a ? "" : a; renderAgents(); if (!state.openAgent) { var d = document.getElementById("agentDrill"); if (d) d.remove(); } return; }
+    if ((x = el("[data-module]"))) { var mo = x.getAttribute("data-module"); state.openModule = state.openModule === mo ? "" : mo; renderModules(); if (!state.openModule) { var d2 = document.getElementById("modDrill"); if (d2) d2.remove(); } return; }
+    if ((x = el("[data-review]"))) { state.rvAgent = x.getAttribute("data-review"); state.rvPage = 0; renderReview(); $("rvList").scrollIntoView({ behavior: "smooth", block: "start" }); return; }
+    if ((x = el("[data-close]"))) { state.openAgent = ""; state.openModule = ""; var e1 = document.getElementById("agentDrill"), e2 = document.getElementById("modDrill"); if (e1) e1.remove(); if (e2) e2.remove(); return; }
+    if ((x = el("[data-rvtab]"))) { state.rvTab = x.getAttribute("data-rvtab"); state.rvPage = 0; renderReview(); return; }
+    if ((x = el("[data-done]"))) { var id = x.getAttribute("data-done"); if (x.checked) done[id] = Date.now(); else delete done[id]; saveDone(); renderFocus(); return; }
+    // a click outside an open row drill-down closes it (text selections excepted)
+    var sel = window.getSelection && String(window.getSelection());
+    if (sel) return;
+    if (!el("tr.inline-drill") && !el("a,button,input,select,th,.kpi")) {
+      if (state.openAgent || state.openModule) { state.openAgent = ""; state.openModule = ""; var q1 = document.getElementById("agentDrill"), q2 = document.getElementById("modDrill"); if (q1) q1.remove(); if (q2) q2.remove(); }
+    }
+  }, true);
+  $("fModule").addEventListener("change", function () { state.module = this.value; renderAll(); });
+  $("fMin").addEventListener("change", function () { state.min = +this.value; renderAgents(); });
+  $("rvAgent").addEventListener("change", function () { state.rvAgent = this.value; state.rvPage = 0; renderReview(); });
+  $("rvQ").addEventListener("input", function () { state.rvQ = this.value; state.rvPage = 0; renderReview(); });
+  $("rvPrev").addEventListener("click", function () { state.rvPage = Math.max(0, state.rvPage - 1); renderReview(); });
+  $("rvNext").addEventListener("click", function () { state.rvPage++; renderReview(); });
+  $("showDone").addEventListener("click", function () { state.showDone = !state.showDone; renderFocus(); });
+  $("aiPick").addEventListener("change", function () { showAi((D.ai || [])[+this.value]); });
+  $("aiBtn").addEventListener("click", function () {
+    var b = this; b.disabled = true; $("aiErr").textContent = ""; b.textContent = "Writing (about 30 seconds)...";
+    BQEBoard.api("ti-board", { method: "POST", body: { action: "ai" } }).then(function (j) { D.ai = [j.ai].concat(D.ai || []).slice(0, 5); renderAi(); })
+      .catch(function (e) { $("aiErr").textContent = e.message; })
+      .then(function () { b.disabled = false; b.textContent = "Generate a new summary"; });
+  });
+
+  // ---------- sign-in, theme, presence ----------
+  function showSignin(msg) { $("board").hidden = true; $("topbar").hidden = true; $("signin").hidden = false; $("signinMsg").textContent = msg || ""; }
+  function renderViewers(people) {
+    $("viewers").innerHTML = people.map(function (p) { return '<span class="viewer-dot' + (p.me ? " me" : "") + '" title="' + esc(p.name + (p.me ? " (you)" : "")) + '">' + esc(p.initials) + '</span>'; }).join("");
+  }
+  $("signInBtn").addEventListener("click", function () { $("signinMsg").textContent = ""; BQEBoard.signIn().catch(function (e) { showSignin(e.message); }); });
+  $("signOutBtn").addEventListener("click", function () { BQEBoard.signOut(); });
+  $("themeBtn").addEventListener("click", function () {
+    var cur = document.documentElement.getAttribute("data-theme") || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+    var next = cur === "dark" ? "light" : "dark"; document.documentElement.setAttribute("data-theme", next);
+    try { localStorage.setItem("trainingInsights.theme", next); } catch (e) {}
+  });
+  try { var th = localStorage.getItem("trainingInsights.theme"); if (th) document.documentElement.setAttribute("data-theme", th); } catch (e) {}
+  BQEBoard.start({
+    board: "training-insights",
+    onSignIn: showSignin,
+    onReady: function (v) {
+      VIEWER = v; $("signin").hidden = true; $("board").hidden = false; $("topbar").hidden = false;
+      $("viewerName").innerHTML = "Viewing: <b>" + esc(v.name) + "</b>";
+      BQEBoard.presence(renderViewers);
+      load();
+      if (!refreshTimer) refreshTimer = setInterval(function () { if (!document.hidden) load(); }, REFRESH_MS);
+    }
+  });
+
+  // ---------- pick up a newly published version of this page (every 5 min, never while typing) ----------
+  var pageHash = null;
+  function checkVersion() {
+    if (!window.crypto || !crypto.subtle || location.protocol === "file:") return;
+    fetch(location.pathname, { cache: "no-store" }).then(function (r) { return r.ok ? r.text() : null; }).then(function (t) {
+      if (!t) return;
+      return crypto.subtle.digest("SHA-256", new TextEncoder().encode(t)).then(function (b) {
+        var h = Array.from(new Uint8Array(b)).join(",");
+        if (pageHash === null) pageHash = h; else if (h !== pageHash && document.activeElement && document.activeElement.tagName !== "INPUT") location.reload();
+      });
+    }).catch(function () {});
+  }
+  checkVersion(); setInterval(checkVersion, 5 * 60 * 1000);
+})();
+</script>
+</body>
+</html>
