@@ -128,6 +128,20 @@
   </div>
 
   <div id="board" hidden style="display:flex; flex-direction:column; gap:22px;">
+    <div class="kpi-grid" id="kpis"></div>
+
+    <details class="panel" id="aiPanel" data-sec="ai">
+      <summary>AI coaching summary</summary>
+      <p class="section-sub">Claude reads the last 90 days of aggregated numbers plus redacted customer snippets (emails, phone numbers, numbers and name-like words are removed first) and writes coaching and training suggestions. It is a starting point for a conversation, not a verdict on anyone. Nothing is written to Zendesk or RingCX.</p>
+      <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:10px">
+        <button type="button" class="btn primary" id="aiBtn">Generate a new summary</button>
+        <select id="aiPick"></select>
+        <span class="small muted" id="aiMeta"></span>
+      </div>
+      <div class="err" id="aiErr"></div>
+      <div class="aibody" id="aiBody"></div>
+    </details>
+
     <div>
       <div class="eyebrow">Support Operations &middot; Training</div>
       <h1>Training Insights</h1>
@@ -144,33 +158,31 @@
       </div>
     </div>
 
-    <details class="panel" open id="focusPanel">
+    <details class="panel" id="focusPanel" data-sec="focus">
       <summary>Where to focus</summary>
-      <p class="section-sub" style="margin-top:8px">Agent and module pairs furthest below the team on the same work, and the areas the whole team struggles with. Tick an item when you have acted on it; a short note on what you did is required.</p>
+      <p class="section-sub" style="margin-top:8px">Agent and module pairs furthest below the team on the same work, and the areas the whole team struggles with. Tick an item when you have acted on it; a short note on what you did is required, and it is shared with everyone who opens this board.</p>
       <div id="focusCoach"></div>
       <h3 class="section-title" style="font-size:16px; margin-top:16px">Training gaps for the whole team</h3>
       <div id="focusTrain"></div>
       <div style="margin-top:10px"><button type="button" class="btn" id="showDone">Show completed</button></div>
     </details>
 
-    <div class="kpi-grid" id="kpis"></div>
-
-    <div>
-      <h2 class="section-title">Agents</h2>
+    <details class="panel" data-sec="agents">
+      <summary>Agents</summary>
       <p class="section-sub">Click a name to see that agent's weakest modules, trend and recent low-scoring work. Colours compare with the team (green better, amber below, red well below) and appear only when the sample is big enough.</p>
-      <div class="panel"><div class="tblwrap"><table id="agentTbl"></table></div></div>
-    </div>
+      <div><div class="tblwrap"><table id="agentTbl"></table></div></div>
+    </details>
 
-    <div>
-      <h2 class="section-title">Modules and areas</h2>
+    <details class="panel" data-sec="modules">
+      <summary>Modules and areas</summary>
       <p class="section-sub">Click a module to see its areas (last 12 months). Escalation is the share of tickets that went to Jira or Level 3.</p>
-      <div class="panel"><div class="tblwrap"><table id="modTbl"></table></div></div>
-    </div>
+      <div><div class="tblwrap"><table id="modTbl"></table></div></div>
+    </details>
 
-    <div>
-      <h2 class="section-title">Low-score review</h2>
+    <details class="panel" data-sec="review">
+      <summary>Low-score review</summary>
       <p class="section-sub">The raw material for a coaching session: bad customer ratings with their comments, and calls ACE scored 5 or less or called negative.</p>
-      <div class="panel">
+      <div>
         <div class="filters" style="margin-bottom:10px">
           <div class="fgroup"><span id="rvTabs"></span></div>
           <div class="fgroup"><label for="rvAgent">Agent</label><select id="rvAgent"></select></div>
@@ -179,25 +191,13 @@
         <div id="rvList"></div>
         <div class="pager"><button type="button" class="btn" id="rvPrev">Prev</button><span id="rvInfo"></span><button type="button" class="btn" id="rvNext">Next</button></div>
       </div>
-    </div>
+    </details>
 
-    <div class="panel" id="aiPanel">
-      <h2 class="section-title">AI coaching summary</h2>
-      <p class="section-sub">Claude reads the last 90 days of aggregated numbers plus redacted customer snippets (emails, phone numbers, numbers and name-like words are removed first) and writes coaching and training suggestions. It is a starting point for a conversation, not a verdict on anyone. Nothing is written to Zendesk or RingCX.</p>
-      <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:10px">
-        <button type="button" class="btn primary" id="aiBtn">Generate a new summary</button>
-        <select id="aiPick"></select>
-        <span class="small muted" id="aiMeta"></span>
-      </div>
-      <div class="err" id="aiErr"></div>
-      <div class="aibody" id="aiBody"></div>
-    </div>
-
-    <details class="panel">
+    <details class="panel" data-sec="method">
       <summary>Method and limits</summary>
       <ul class="notes" id="notes"></ul>
     </details>
-    <footer>BQE Software &middot; Internal &middot; Training Insights &middot; Version 1.1</footer>
+    <footer>BQE Software &middot; Internal &middot; Training Insights &middot; Version 1.3</footer>
   </div>
 </div>
 
@@ -266,13 +266,14 @@
   }
 
   // ---------- Where to focus ----------
-  var DONE_KEY = "trainingInsights.done.v1";
-  function loadDone() { try { return JSON.parse(localStorage.getItem(DONE_KEY)) || {}; } catch (e) { return {}; } }
-  var done = loadDone();
+  // Completion notes are shared: they live in the database (ti_focus_notes) and arrive with the board data.
+  var done = {};
+  function loadDone() {
+    done = {};
+    ((D && D.focus_notes) || []).forEach(function (r) { done[r.item_id] = { t: Date.parse(r.created_at), by: r.by_name, note: r.note }; });
+  }
+  function stamp(t) { try { return new Date(t).toLocaleString([], { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" }); } catch (e) { return ""; } }
   var pendingNote = {};
-  function doneTime(d) { return typeof d === "object" ? d.t : d; }
-  function doneNote(d) { return typeof d === "object" ? (d.note || "") : ""; }
-  function saveDone() { try { localStorage.setItem(DONE_KEY, JSON.stringify(done)); } catch (e) {} }
   function coachCandidates() {
     var rg = range(0), byAM = group(function (r) { return r[I.agent] + "|" + r[I.module]; }, rg, true);
     var byM = group(function (r) { return r[I.module]; }, rg, true), out = [];
@@ -318,7 +319,7 @@
     if (!shown.length) return "<div class='muted small'>Nothing stands out with the current filters.</div>";
     return shown.map(function (c) {
       var d = done[c.id], pn = pendingNote[c.id], extra = "";
-      if (d) extra = "<span class='note'>" + (doneNote(d) ? "Note: " + esc(doneNote(d)) : "Completed before notes were required") + "</span>";
+      if (d) extra = "<span class='note'>" + esc(d.note) + " (" + esc(d.by) + ", " + esc(stamp(d.t)) + ")</span>";
       else if (pn !== undefined) extra = "<div class='noteform'><input type='text' maxlength='300' data-notein='" + esc(c.id) + "' placeholder='What did you do? A note is required' value='" + esc(pn) + "'><button type='button' class='btn' data-notesave='" + esc(c.id) + "'>Save</button><button type='button' class='btn' data-notecancel='" + esc(c.id) + "'>Cancel</button></div>";
       return "<div class='focus-item" + (d ? " done" : "") + "'><input type='checkbox' data-done='" + esc(c.id) + "'" + (d ? " checked" : (pn !== undefined ? " checked" : "")) + " aria-label='Mark done'><div class='txt'>" + mk(c) + "<span class='ev'>" + esc(c.parts.join("; ")) + "</span>" + extra + "</div></div>";
     }).join("");
@@ -493,7 +494,7 @@
   }
   function setData(j) {
     D = j; I = {}; (j.areas || []).forEach(function (r) { var m = String(r[0]), a = String(r[1]); if (a.toLowerCase().indexOf(m.toLowerCase() + " ") === 0 && a.length > m.length + 1) r[1] = a.slice(m.length + 1); }); D.agg_cols.forEach(function (c, i) { I[c] = i; }); D.area_ix = {}; D.area_cols.forEach(function (c, i) { D.area_ix[c] = i; });
-    buildFilters(); renderAll(); renderAi();
+    loadDone(); buildFilters(); renderAll(); renderAi();
     $("notes").innerHTML = [
       "Population: tickets created in the last 12 months with an assignee, excluding the Procurement and Custom Reports groups. Phone, email and webform are the ticket's channel.",
       "CSAT is Zendesk's good or bad rating, counted on the ticket's created week and assignee. Only " + (function () { var t = total([ "0000", "9999" ]); return t.n ? Math.round(100 * ratings(t) / t.n) + "% of tickets" : "a minority of tickets"; })() + " get a rating, so small samples are shown in brackets and are not coloured.",
@@ -526,7 +527,7 @@
     if ((x = el("[data-review]"))) { state.rvAgent = x.getAttribute("data-review"); state.rvPage = 0; renderReview(); $("rvList").scrollIntoView({ behavior: "smooth", block: "start" }); return; }
     if ((x = el("[data-close]"))) { state.openAgent = ""; state.openModule = ""; var e1 = document.getElementById("agentDrill"), e2 = document.getElementById("modDrill"); if (e1) e1.remove(); if (e2) e2.remove(); return; }
     if ((x = el("[data-rvtab]"))) { state.rvTab = x.getAttribute("data-rvtab"); state.rvPage = 0; renderReview(); return; }
-    if ((x = el("[data-done]"))) { var id = x.getAttribute("data-done"); if (x.checked) { pendingNote[id] = ""; renderFocus(); var ni = document.querySelector("[data-notein]"); if (ni) ni.focus(); } else { delete done[id]; delete pendingNote[id]; saveDone(); renderFocus(); } return; }
+    if ((x = el("[data-done]"))) { var id = x.getAttribute("data-done"); if (x.checked) { pendingNote[id] = ""; renderFocus(); var ni = document.querySelector("[data-notein]"); if (ni) ni.focus(); } else { var old = done[id]; delete done[id]; delete pendingNote[id]; renderFocus(); BQEBoard.api("ti-board", { method: "POST", body: { action: "focus_undo", id: id } }).catch(function (e) { if (old) done[id] = old; renderFocus(); alert("Could not reopen the item: " + e.message); }); } return; }
     if ((x = el("[data-notecancel]"))) { delete pendingNote[x.getAttribute("data-notecancel")]; renderFocus(); return; }
     if ((x = el("[data-notesave]"))) { saveNote(x.getAttribute("data-notesave")); return; }
     // a click outside an open row drill-down closes it (text selections excepted)
@@ -580,10 +581,24 @@
     var inp = Array.prototype.filter.call(document.querySelectorAll("[data-notein]"), function (i) { return i.getAttribute("data-notein") === id; })[0];
     var t = inp ? inp.value.trim() : "";
     if (!t) { if (inp) { inp.style.borderColor = "var(--critical)"; inp.focus(); } return; }
-    done[id] = { t: Date.now(), note: t }; delete pendingNote[id]; saveDone(); renderFocus();
+    if (inp) { inp.disabled = true; }
+    BQEBoard.api("ti-board", { method: "POST", body: { action: "focus_done", id: id, note: t } }).then(function (j) {
+      var r = j.note || {}; done[id] = { t: Date.parse(r.created_at) || Date.now(), by: r.by_name || "", note: r.note || t }; delete pendingNote[id]; renderFocus();
+    }).catch(function (e) { renderFocus(); alert("Could not save the note: " + e.message); });
   }
   document.addEventListener("input", function (e) { var id = e.target.getAttribute && e.target.getAttribute("data-notein"); if (id) pendingNote[id] = e.target.value; });
   document.addEventListener("keydown", function (e) { var id = e.target.getAttribute && e.target.getAttribute("data-notein"); if (!id) return; if (e.key === "Enter") saveNote(id); else if (e.key === "Escape") { delete pendingNote[id]; renderFocus(); } });
+
+  // ---------- sections start collapsed; each person's open/closed choice is remembered in their browser ----------
+  var OPEN_KEY = "trainingInsights.open.v1";
+  var openSecs = {}; try { openSecs = JSON.parse(localStorage.getItem(OPEN_KEY)) || {}; } catch (e) {}
+  Array.prototype.forEach.call(document.querySelectorAll("details[data-sec]"), function (d) {
+    d.open = !!openSecs[d.getAttribute("data-sec")];
+    d.addEventListener("toggle", function () { openSecs[d.getAttribute("data-sec")] = d.open; try { localStorage.setItem(OPEN_KEY, JSON.stringify(openSecs)); } catch (e) {} });
+  });
+  // jumping to a table (KPI tile, agent name, review link) opens the section it sits in first
+  var nativeScroll = Element.prototype.scrollIntoView;
+  Element.prototype.scrollIntoView = function () { var d = this.closest && this.closest("details"); if (d && !d.open) d.open = true; return nativeScroll.apply(this, arguments); };
 
   // ---------- pick up a newly published version of this page (every 5 min, never while typing) ----------
   var pageHash = null;
