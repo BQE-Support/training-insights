@@ -73,6 +73,9 @@
   .focus-item:first-child { border-top: 0; }
   .focus-item.done { opacity: .5; }
   .focus-item .txt { flex: 1; font-size: 13.5px; }
+  .focus-item .note { display: block; margin-top: 4px; font-size: 12.5px; color: var(--ink-2); font-style: italic; }
+  .focus-item .noteform { display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
+  .focus-item .noteform input { flex: 1; min-width: 180px; padding: 5px 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--ink); font: inherit; font-size: 13px; }
   .focus-item .ev { color: var(--ink-2); font-size: 12.5px; display: block; margin-top: 2px; }
   .tblwrap { width: 100%; overflow-x: hidden; }
   table { width: 100%; border-collapse: collapse; table-layout: auto; font-size: 13px; }
@@ -143,7 +146,7 @@
 
     <details class="panel" open id="focusPanel">
       <summary>Where to focus</summary>
-      <p class="section-sub" style="margin-top:8px">Agent and module pairs furthest below the team on the same work, and the areas the whole team struggles with. Tick an item when you have acted on it.</p>
+      <p class="section-sub" style="margin-top:8px">Agent and module pairs furthest below the team on the same work, and the areas the whole team struggles with. Tick an item when you have acted on it; a short note on what you did is required.</p>
       <div id="focusCoach"></div>
       <h3 class="section-title" style="font-size:16px; margin-top:16px">Training gaps for the whole team</h3>
       <div id="focusTrain"></div>
@@ -194,7 +197,7 @@
       <summary>Method and limits</summary>
       <ul class="notes" id="notes"></ul>
     </details>
-    <footer>BQE Software &middot; Internal &middot; Training Insights &middot; Version 1.0</footer>
+    <footer>BQE Software &middot; Internal &middot; Training Insights &middot; Version 1.1</footer>
   </div>
 </div>
 
@@ -266,6 +269,9 @@
   var DONE_KEY = "trainingInsights.done.v1";
   function loadDone() { try { return JSON.parse(localStorage.getItem(DONE_KEY)) || {}; } catch (e) { return {}; } }
   var done = loadDone();
+  var pendingNote = {};
+  function doneTime(d) { return typeof d === "object" ? d.t : d; }
+  function doneNote(d) { return typeof d === "object" ? (d.note || "") : ""; }
   function saveDone() { try { localStorage.setItem(DONE_KEY, JSON.stringify(done)); } catch (e) {} }
   function coachCandidates() {
     var rg = range(0), byAM = group(function (r) { return r[I.agent] + "|" + r[I.module]; }, rg, true);
@@ -311,8 +317,10 @@
     var shown = list.filter(function (c) { return state.showDone || !done[c.id]; }).slice(0, 10);
     if (!shown.length) return "<div class='muted small'>Nothing stands out with the current filters.</div>";
     return shown.map(function (c) {
-      var d = done[c.id];
-      return "<div class='focus-item" + (d ? " done" : "") + "'><input type='checkbox' data-done='" + esc(c.id) + "'" + (d ? " checked" : "") + " aria-label='Mark done'><div class='txt'>" + mk(c) + "<span class='ev'>" + esc(c.parts.join("; ")) + "</span></div></div>";
+      var d = done[c.id], pn = pendingNote[c.id], extra = "";
+      if (d) extra = "<span class='note'>" + (doneNote(d) ? "Note: " + esc(doneNote(d)) : "Completed before notes were required") + "</span>";
+      else if (pn !== undefined) extra = "<div class='noteform'><input type='text' maxlength='300' data-notein='" + esc(c.id) + "' placeholder='What did you do? A note is required' value='" + esc(pn) + "'><button type='button' class='btn' data-notesave='" + esc(c.id) + "'>Save</button><button type='button' class='btn' data-notecancel='" + esc(c.id) + "'>Cancel</button></div>";
+      return "<div class='focus-item" + (d ? " done" : "") + "'><input type='checkbox' data-done='" + esc(c.id) + "'" + (d ? " checked" : (pn !== undefined ? " checked" : "")) + " aria-label='Mark done'><div class='txt'>" + mk(c) + "<span class='ev'>" + esc(c.parts.join("; ")) + "</span>" + extra + "</div></div>";
     }).join("");
   }
   function renderFocus() {
@@ -518,7 +526,9 @@
     if ((x = el("[data-review]"))) { state.rvAgent = x.getAttribute("data-review"); state.rvPage = 0; renderReview(); $("rvList").scrollIntoView({ behavior: "smooth", block: "start" }); return; }
     if ((x = el("[data-close]"))) { state.openAgent = ""; state.openModule = ""; var e1 = document.getElementById("agentDrill"), e2 = document.getElementById("modDrill"); if (e1) e1.remove(); if (e2) e2.remove(); return; }
     if ((x = el("[data-rvtab]"))) { state.rvTab = x.getAttribute("data-rvtab"); state.rvPage = 0; renderReview(); return; }
-    if ((x = el("[data-done]"))) { var id = x.getAttribute("data-done"); if (x.checked) done[id] = Date.now(); else delete done[id]; saveDone(); renderFocus(); return; }
+    if ((x = el("[data-done]"))) { var id = x.getAttribute("data-done"); if (x.checked) { pendingNote[id] = ""; renderFocus(); var ni = document.querySelector("[data-notein]"); if (ni) ni.focus(); } else { delete done[id]; delete pendingNote[id]; saveDone(); renderFocus(); } return; }
+    if ((x = el("[data-notecancel]"))) { delete pendingNote[x.getAttribute("data-notecancel")]; renderFocus(); return; }
+    if ((x = el("[data-notesave]"))) { saveNote(x.getAttribute("data-notesave")); return; }
     // a click outside an open row drill-down closes it (text selections excepted)
     var sel = window.getSelection && String(window.getSelection());
     if (sel) return;
@@ -565,6 +575,15 @@
       if (!refreshTimer) refreshTimer = setInterval(function () { if (!document.hidden) load(); }, REFRESH_MS);
     }
   });
+
+  function saveNote(id) {
+    var inp = Array.prototype.filter.call(document.querySelectorAll("[data-notein]"), function (i) { return i.getAttribute("data-notein") === id; })[0];
+    var t = inp ? inp.value.trim() : "";
+    if (!t) { if (inp) { inp.style.borderColor = "var(--critical)"; inp.focus(); } return; }
+    done[id] = { t: Date.now(), note: t }; delete pendingNote[id]; saveDone(); renderFocus();
+  }
+  document.addEventListener("input", function (e) { var id = e.target.getAttribute && e.target.getAttribute("data-notein"); if (id) pendingNote[id] = e.target.value; });
+  document.addEventListener("keydown", function (e) { var id = e.target.getAttribute && e.target.getAttribute("data-notein"); if (!id) return; if (e.key === "Enter") saveNote(id); else if (e.key === "Escape") { delete pendingNote[id]; renderFocus(); } });
 
   // ---------- pick up a newly published version of this page (every 5 min, never while typing) ----------
   var pageHash = null;
